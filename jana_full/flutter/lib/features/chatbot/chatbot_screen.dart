@@ -105,16 +105,18 @@ class ChatNotifier extends StateNotifier<ChatState> {
         isLoading: false,
       );
     } on DioException catch (e) {
-      final errMsg = ChatMessage(
-        role: 'assistant',
-        content: 'Sorry, something went wrong. Try again in a moment.',
-        sentAt: DateTime.now().toIso8601String(),
-      );
-      state = state.copyWith(
-        messages:  [...state.messages, errMsg],
-        isLoading: false,
-      );
-    }
+  // temporarily show the real error instead of the friendly message
+  // so we can see what's actually failing
+  final errMsg = ChatMessage(
+  role:    'assistant',
+  content: 'Debug: ${e.type} — ${e.response?.statusCode} — ${e.message}',
+  sentAt:  DateTime.now().toIso8601String(),
+  );
+  state = state.copyWith(
+  messages:  [...state.messages, errMsg],
+  isLoading: false,
+  );
+  }
   }
 }
 

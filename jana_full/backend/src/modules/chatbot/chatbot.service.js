@@ -2,7 +2,9 @@ const supabase  = require('../../config/supabase');
 const { matchRule } = require('./chatbot.rules');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY, {
+  apiVersion: 'v1beta',
+});
 
 // ─── getOrCreateSession ───────────────────────────────────────────────────────
 // Each user has one active session at a time for the MVP.
@@ -72,7 +74,7 @@ async function handleMessage(userId, sessionId, userMessage, summary) {
 // ─── callGemini ───────────────────────────────────────────────────────────────
 async function callGemini(userId, sessionId, userMessage, summary) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
 
     // load last 10 messages for context
     const history = await getHistory(sessionId, 10);
@@ -100,7 +102,10 @@ Keep responses short (2-3 sentences max). Do not recommend specific medications.
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }],
       })),
-      systemInstruction: systemContext,
+      systemInstruction: {
+        role: 'system',
+        parts: [{ text: systemContext }],
+      },
     });
 
     const result = await chat.sendMessage(userMessage);

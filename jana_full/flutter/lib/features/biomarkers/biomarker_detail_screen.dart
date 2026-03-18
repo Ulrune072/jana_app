@@ -271,7 +271,7 @@ class _RangeToggle extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // restored to the original green color scheme used everywhere else
-    final bg       = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final bg       = isDark ? const Color(0xFF1E1E1E) : Colors.black;
     final inactive = isDark ? Colors.white60 : AppColors.textSecondary;
 
     return Container(
