@@ -1,32 +1,51 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../core/api_client.dart';
 import '../../shared/models/alert.dart';
 
-// what the dashboard screen needs to show
 class DashboardData {
-  final Map<String, double?> readings; // type -> value
+  final Map<String, double?> readings;
   final int unreadAlerts;
   final List<Alert> alerts;
+  final DateTime lastFetched; // so the UI can show "updated X seconds ago"
 
   const DashboardData({
     required this.readings,
     required this.unreadAlerts,
     required this.alerts,
+    required this.lastFetched,
   });
 }
 
 class DashboardNotifier extends StateNotifier<AsyncValue<DashboardData>> {
   final Dio _api = createApiClient();
+  Timer? _timer;
 
   DashboardNotifier() : super(const AsyncValue.loading()) {
     load();
+    // auto-refresh every 60 seconds
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) {
+      print('[dashboard] auto-refresh triggered');
+      load(silent: true); // silent = don't show loading spinner on auto-refresh
+    });
   }
 
-  Future<void> load() async {
-    state = const AsyncValue.loading();
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  // silent: true means keep showing existing data while refreshing in background
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      state = const AsyncValue.loading();
+    }
+
+    print('[dashboard] fetching latest readings...');
+
     try {
-      // fetch latest readings and alerts in parallel
       final results = await Future.wait([
         _api.get('/api/biomarkers/latest'),
         _api.get('/api/alerts'),
@@ -36,11 +55,15 @@ class DashboardNotifier extends StateNotifier<AsyncValue<DashboardData>> {
       final alertsRaw = results[1].data['data'] as List;
       final unread    = results[1].data['unread'] as int? ?? 0;
 
-      // flatten readings to Map<type, value>
       final readings = <String, double?>{};
       for (final entry in latestRaw.entries) {
-        readings[entry.key] = (entry.value['value'] as num?)?.toDouble();
+        final value = (entry.value['value'] as num?)?.toDouble();
+        readings[entry.key] = value;
+        print('[dashboard] ${entry.key}: $value');
       }
+
+      final now = DateTime.now();
+      print('[dashboard] fetch complete at $now — ${readings.length} types');
 
       final alerts = alertsRaw.map((a) => Alert.fromJson(a)).toList();
 
@@ -48,8 +71,12 @@ class DashboardNotifier extends StateNotifier<AsyncValue<DashboardData>> {
         readings:     readings,
         unreadAlerts: unread,
         alerts:       alerts,
+        lastFetched:  now,
       ));
     } on DioException catch (e) {
+      print('[dashboard] fetch error: ${e.response?.statusCode} — ${e.response?.data}');
+      // on auto-refresh failure, keep showing old data instead of error screen
+      if (silent && state is AsyncData) return;
       state = AsyncValue.error(
         e.response?.data?['error'] ?? 'Failed to load data',
         StackTrace.current,
@@ -57,13 +84,12 @@ class DashboardNotifier extends StateNotifier<AsyncValue<DashboardData>> {
     }
   }
 
-  // called by manual input form
   Future<void> submitManualReading(String type, double value) async {
     try {
       await _api.post('/api/biomarkers/ingest', data: [
         {'type': type, 'value': value, 'source': 'manual'},
       ]);
-      await load(); // refresh dashboard after adding a reading
+      await load();
     } on DioException catch (e) {
       throw Exception(e.response?.data?['error'] ?? 'Failed to submit reading');
     }
@@ -71,6 +97,6 @@ class DashboardNotifier extends StateNotifier<AsyncValue<DashboardData>> {
 }
 
 final dashboardProvider =
-    StateNotifierProvider<DashboardNotifier, AsyncValue<DashboardData>>(
-  (ref) => DashboardNotifier(),
+StateNotifierProvider<DashboardNotifier, AsyncValue<DashboardData>>(
+      (ref) => DashboardNotifier(),
 );

@@ -84,12 +84,11 @@ async function checkThresholdsAndAlert(userId, reading) {
 // Returns the single most recent reading for each biomarker type.
 // Used by the dashboard summary cards.
 async function getLatestReadings(userId) {
-  // We query once per type and grab the most recent row.
-  // Not the most elegant SQL but it's simple and fast enough for MVP.
+  console.log(`[latest] fetching for user ${userId.slice(0, 8)}...`);
   const results = {};
 
   for (const type of VALID_TYPES) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('biomarker_readings')
       .select('*')
       .eq('user_id', userId)
@@ -98,9 +97,17 @@ async function getLatestReadings(userId) {
       .limit(1)
       .maybeSingle();
 
-    if (data) results[type] = data;
+    if (error) {
+      console.log(`[latest] ${type}: ERROR — ${error.message}`);
+    } else if (data) {
+      console.log(`[latest] ${type}: ${data.value} (recorded_at: ${data.recorded_at})`);
+      results[type] = data;
+    } else {
+      console.log(`[latest] ${type}: no data`);
+    }
   }
 
+  console.log(`[latest] done — ${Object.keys(results).length}/${VALID_TYPES.length} types have data`);
   return results;
 }
 

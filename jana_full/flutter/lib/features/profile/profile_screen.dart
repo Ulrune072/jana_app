@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/app_theme.dart';
 import 'profile_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -42,14 +43,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.dispose();
   }
 
-  void _populate(p) {
-    _nameCtrl.text   = p.fullName;
-    _dobCtrl.text    = p.dateOfBirth ?? '';
-    _doctorCtrl.text = p.doctorEmail ?? '';
-    _heightCtrl.text = p.heightCm?.toStringAsFixed(0) ?? '';
-    _weightCtrl.text = p.weightKg?.toStringAsFixed(1) ?? '';
-    _selectedGender  = p.gender;
-    _populated       = true;
+  void _populate(dynamic profile) {
+    if (_populated || profile == null) return;
+
+    _nameCtrl.text   = profile.fullName;
+    _doctorCtrl.text = profile.doctorEmail ?? '';   // was _emailCtrl
+    _heightCtrl.text = profile.heightCm != null
+        ? profile.heightCm!.toStringAsFixed(0) : '';
+    _weightCtrl.text = profile.weightKg != null
+        ? profile.weightKg!.toStringAsFixed(0) : '';
+    _dobCtrl.text    = profile.dateOfBirth ?? '';   // was _selectedDob
+    _selectedGender  = profile.gender;
+
+    _populated = true;
   }
 
   Future<void> _save() async {
@@ -84,6 +90,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(profileProvider);
+    _populate(state.profile);
 
     ref.listen<ProfileState>(profileProvider, (_, next) {
       if (!_populated && next.profile != null) {
@@ -176,6 +183,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             icon: const Icon(Icons.edit_outlined, size: 18),
                             label: const Text('Edit profile'),
                           )),
+                  const SizedBox(height: 40),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await Supabase.instance.client.auth.signOut();
+                        if (context.mounted) {
+                          Navigator.of(context).pushReplacementNamed('/login');
+                        }
+                      },
+                      icon: const Icon(Icons.logout, color: AppColors.critical),
+                      label: const Text(
+                        'Log out',
+                        style: TextStyle(color: AppColors.critical),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.critical),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 40),
                 ]),
               )),
